@@ -79,16 +79,19 @@ def updateDb(Config, f):
         print('INSERT %s INTO DATABASE... (%s to %s)' % (name, beginTime, endTime))
         print >>f, 'INSERT %s INTO DATABASE... (%s to %s)' % (name, beginTime, endTime)
         try:
+            addCount = 0
             query = 'REPLACE INTO futures.`prices` VALUES ' # insert data into db
             for i in xrange(len(wind_re.Times)):
                 if not math.isnan(wind_re.Data[0][i]):
+                    addCount += 1
                     query += '(\'%s\', \'%s\', %f, %f, %f, %f, %f, %f)' % \
                     (name, wind_re.Times[i].strftime('%Y-%m-%d'), wind_re.Data[0][i], wind_re.Data[1][i], \
                     wind_re.Data[2][i], wind_re.Data[3][i], wind_re.Data[4][i], wind_re.Data[5][i])
                     if i < len(wind_re.Times)-1:
                         query += ','
-            cursor.execute(query)
-            conn.commit()
+            if not addCount == 0:
+                cursor.execute(query)
+                conn.commit()
         except sqlconn.Error as e:
             w.close()
             cursor.close()
@@ -136,16 +139,19 @@ def updateDb(Config, f):
         print >>f, 'INSERT %s INTO DATABASE... (%s)' % (name, tradeDate)
         
         try:
+            addCount = 0
             query = 'REPLACE INTO futures.`prices` VALUES ' # insert data into db
             for i in xrange(len(wind_re.Codes)):
                 if not math.isnan(wind_re.Data[0][i]):
+                    addCount += 1
                     query += '(\'%s\', \'%s\', %f, %f, %f, %f, %f, %f)' % \
                     (wind_re.Codes[i], wind_re.Times[0].strftime('%Y-%m-%d'), wind_re.Data[0][i], wind_re.Data[1][i], \
                     wind_re.Data[2][i], wind_re.Data[3][i], wind_re.Data[4][i], wind_re.Data[5][i])
                     if i < len(wind_re.Codes)-1:
                         query += ','
-            cursor.execute(query)
-            conn.commit()
+            if not addCount == 0:
+                cursor.execute(query)
+                conn.commit()
         except sqlconn.Error as e:
             w.close()
             cursor.close()
