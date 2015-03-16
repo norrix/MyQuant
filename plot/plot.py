@@ -61,7 +61,7 @@ def plotDb(Config, f):
         print >>f, 'Plotting ' + name['nameid1'] + '_' + name['nameid2'] + '.png'
         text = 'Time: ' + Time[0].strftime('%Y-%m-%d') + ' to ' + Time[-1].strftime('%Y-%m-%d')
 
-        fig = plt.figure(figsize = (10,8))
+        fig = plt.figure(figsize = (8,8))
         ax1 = fig.add_subplot(211)
         ax2 = fig.add_subplot(212)
         ax1.set_title('Price', fontsize = 20)
@@ -78,6 +78,9 @@ def plotDb(Config, f):
         ax2.axhspan(name['lowerlim'], name['upperlim'], facecolor='0.3', alpha=0.3, edgecolor  = None)
         ax2.legend(framealpha = 0.2, fontsize = 'small')
         ax2.grid(True)
+        
+        plt.setp(ax1.get_xticklabels(), visible=False)
+        plt.setp(ax2.get_xticklabels(), rotation = 30, horizontalalignment='right') # labels旋转角度        
         
         fig.text(0.02, 0.95, text, bbox=dict(facecolor='grey', alpha=0.2), fontsize = 10)
         fig.savefig(name['nameid1'] + '_' + name['nameid2'] + '.png')

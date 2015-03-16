@@ -10,7 +10,6 @@ import os
 import datetime
 import matplotlib.pyplot as plt
 import mysql.connector as sqlconn
-from WindPy import w
 
 
 try:
@@ -79,7 +78,8 @@ ax2.grid(True)
 fig.text(0.02, 0.95, text, bbox=dict(facecolor='grey', alpha=0.2), fontsize = 10)
 fig.savefig('test.png')
 
-
+plt.setp(ax1.get_xticklabels(), visible=False)
+plt.setp(ax2.get_xticklabels(), rotation = 30, horizontalalignment='right') # labels旋转角度       
 
 
 
