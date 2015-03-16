@@ -61,7 +61,7 @@ def plotDb(Config, f):
         print >>f, 'Plotting ' + name['nameid1'] + '_' + name['nameid2'] + '.png'
         text = 'Time: ' + Time[0].strftime('%Y-%m-%d') + ' to ' + Time[-1].strftime('%Y-%m-%d')
 
-        fig = plt.figure(figsize = (8,8))
+        fig = plt.figure(figsize = (5,5))
         ax1 = fig.add_subplot(211)
         ax2 = fig.add_subplot(212)
         ax1.set_title('Price', fontsize = 20)
@@ -154,7 +154,7 @@ def plot(FTPPath, confFile, myEmail):
 if __name__ == '__main__':
     FTPPath = r'D:\FTP'
     confFile = 'config.csv'
-    myEmail = {'mark':False,'emailFile':'email.csv'} # email settings
+    myEmail = {'mark':True,'emailFile':'email.csv'} # email settings
     
     os.chdir(FTPPath)
     if update.update(confFile):
