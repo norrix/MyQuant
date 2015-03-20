@@ -5,7 +5,7 @@ Created on Mon Mar 09 14:44:30 2015
 @author: norris
 
 """
-# Update Database from Wind
+# Update Database from Wind (Both futures and spot data)
 # futures.`prices`: name, time, price, vol
 import os
 import datetime
@@ -14,6 +14,9 @@ import pandas as pd
 import mysql.connector as sqlconn
 from WindPy import w
 
+# get 'CU' from 'CU1505.SHF'
+def getNameid(name):
+    return "".join([a for a in name[:2] if a.isalpha()])
 
 # insert update time into db after data updated
 def updateTime(cursor, conn):
@@ -60,6 +63,8 @@ def updateDb(Config, f):
   
     
     #oldNameList中不存在的新商品，需要重新从头更新，更新到today/yestoday
+    nameid = None
+    nameidList = set()
     for name in newNameList - oldNameList:
         ipo_date = w.wsd(name, 'ipo_date').Data[0][0]  # get ipo_date
         if ipo_date == None:
@@ -69,13 +74,14 @@ def updateDb(Config, f):
             return False, 'WSD fails! IPO_DATE of \"' + name + '\" does not exist!'
         beginTime = (ipo_date + datetime.timedelta(1)).strftime('%Y-%m-%d')
         endTime = (now - (not todayValid) * datetime.timedelta(1)).strftime("%Y-%m-%d")
-        wind_re = w.wsd(name, 'open,high,low,close,volume,oi', beginTime, endTime, "Fill=Previous") # get raw data
+        # get raw futures data
+        wind_re = w.wsd(name, 'open,high,low,close,volume,oi', beginTime, endTime, "Fill=Previous")
         if wind_re.ErrorCode != 0:
             w.close()
             cursor.close()
             conn.close()
             return False, 'WSD fails! Name = \'%s\' beginTime = \'%s\' endTime = \'%s\' ErrorCode = %d Info = \'%s\'' % \
-            (name, beginTime, endTime,wind_re.ErrorCode, wind_re.Data[0][0])
+            (name, beginTime, endTime, wind_re.ErrorCode, wind_re.Data[0][0])
         print('INSERT %s INTO DATABASE... (%s to %s)' % (name, beginTime, endTime))
         print >>f, 'INSERT %s INTO DATABASE... (%s to %s)' % (name, beginTime, endTime)
         try:
@@ -96,7 +102,56 @@ def updateDb(Config, f):
             w.close()
             cursor.close()
             conn.close()
-            return False, query[:300] + '...\nQuery fails! {}'.format(e)
+            return False, query[:300] + '...\nQuery fails! {}'.format(e)        
+        
+        #对于不同的nameid，需要获取不同的spotid
+        nameid = getNameid(name)
+        
+        if not nameid in nameidList:
+            nameidList.add(nameid)
+            try:
+                query = 'SELECT spotid FROM futures.`spotlist` WHERE nameid = \'%s\' LIMIT 1' % nameid
+                cursor.execute(query)
+            except sqlconn.Error as e:
+                return False, query + '\nQuery fails! {}'.format(e)
+            spotid = None
+            spotid = cursor.fetchone()
+            if spotid == None:
+                w.close()
+                cursor.close()
+                conn.close()
+                return False, 'Error! Failed to query spotid for nameid = %s' % name
+            else:
+                spotid = spotid[0]
+            wind_re = w.wsd(spotid, 'close', beginTime, endTime, "Fill=Previous") # get raw spot data
+            if wind_re.ErrorCode != 0:
+                w.close()
+                cursor.close()
+                conn.close()
+                return False, 'WSD fails! Name = \'%s\' beginTime = \'%s\' endTime = \'%s\' ErrorCode = %d Info = \'%s\'' % \
+                (spotid, beginTime, endTime, wind_re.ErrorCode, wind_re.Data[0][0])
+            print('INSERT %s INTO DATABASE... (%s to %s)' % (spotid, beginTime, endTime))
+            print >>f, 'INSERT %s INTO DATABASE... (%s to %s)' % (spotid, beginTime, endTime)
+            try:
+                addCount = 0
+                query = 'REPLACE INTO futures.`prices` (Symbol, Time, Close) VALUES ' # insert data into db
+                for i in xrange(len(wind_re.Times)):
+                    if not math.isnan(wind_re.Data[0][i]):
+                        addCount += 1
+                        query += '(\'%s\', \'%s\', %f)' % \
+                        (spotid, wind_re.Times[i].strftime('%Y-%m-%d'), wind_re.Data[0][i])
+                        if i < len(wind_re.Times)-1:
+                            query += ','
+                if not addCount == 0:
+                    cursor.execute(query)
+                    conn.commit()
+            except sqlconn.Error as e:
+                w.close()
+                cursor.close()
+                conn.close()
+                return False, query[:300] + '...\nQuery fails! {}'.format(e)
+        
+        
     
     #oldNameList中的商品从上一次成功更新时间开始更新，更新到today/yestoday
     #如果是第一次更新，即update为空表，则更新已完成
@@ -126,8 +181,11 @@ def updateDb(Config, f):
         beginTime = time + (time.time() > datetime.time(15, 30)) * datetime.timedelta(1)
         endTime = now - (not todayValid) * datetime.timedelta(1)
     name = ','.join(oldNameList)
+    nameidList = str(set(map(getNameid, oldNameList)))[5:-2]
+    
     while (beginTime - endTime).days <= 0: # every tradeDate from beginTime to endTime
         tradeDate = beginTime.strftime('%Y-%m-%d')
+        # get raw futures data
         wind_re = w.wss(name, 'open,high,low,close,volume,oi', 'tradeDate=%s;priceAdj=F;cycle=D' % tradeDate) # get raw data
         if wind_re.ErrorCode != 0:
             w.close()
@@ -157,6 +215,56 @@ def updateDb(Config, f):
             cursor.close()
             conn.close()
             return False, query[:300] + '...\nQuery fails! {}'.format(e)
+        wind_re = w.wss(name, 'open,high,low,close,volume,oi', 'tradeDate=%s;priceAdj=F;cycle=D' % tradeDate) # get raw data
+        if wind_re.ErrorCode != 0:
+            w.close()
+            cursor.close()
+            conn.close()
+            return False, 'WSS fails! Name = \'%s\' tradeDate = \'%s\' ErrorCode = %d Info = \'%s\'' % \
+            (name, tradeDate, wind_re.ErrorCode, wind_re.Data[0][0])
+        print('INSERT %s INTO DATABASE... (%s)' % (name, tradeDate))
+        print >>f, 'INSERT %s INTO DATABASE... (%s)' % (name, tradeDate)
+        
+        # get spotidList
+        try:
+            query = 'SELECT spotid FROM futures.`spotlist` WHERE nameid IN (%s)' % nameidList
+            cursor.execute(query)
+        except sqlconn.Error as e:
+            w.close()
+            cursor.close()
+            conn.close()
+            return False, 'Query fails! {}'.format(e)
+        spotid = [i[0] for i in cursor]
+        # get raw spot data
+        wind_re = w.wss(spotid, 'close', 'tradeDate=%s;priceAdj=F;cycle=D' % tradeDate) # get raw data
+        if wind_re.ErrorCode != 0:
+            w.close()
+            cursor.close()
+            conn.close()
+            return False, 'WSS fails! Name = \'%s\' tradeDate = \'%s\' ErrorCode = %d Info = \'%s\'' % \
+            (spotid, tradeDate, wind_re.ErrorCode, wind_re.Data[0][0])
+        print('INSERT %s INTO DATABASE... (%s)' % (spotid, tradeDate))
+        print >>f, 'INSERT %s INTO DATABASE... (%s)' % (spotid, tradeDate)
+        
+        try:
+            addCount = 0
+            query = 'REPLACE INTO futures.`prices` (Symbol, Time, Close) VALUES ' # insert data into db
+            for i in xrange(len(wind_re.Codes)):
+                if not math.isnan(wind_re.Data[0][i]):
+                    addCount += 1
+                    query += '(\'%s\', \'%s\', %f)' % \
+                    (wind_re.Codes[i], wind_re.Times[0].strftime('%Y-%m-%d'), wind_re.Data[0][i])
+                    if i < len(wind_re.Codes)-1:
+                        query += ','
+            if not addCount == 0:
+                cursor.execute(query)
+                conn.commit()
+        except sqlconn.Error as e:
+            w.close()
+            cursor.close()
+            conn.close()
+            return False, query[:300] + '...\nQuery fails! {}'.format(e)
+            
         beginTime += datetime.timedelta(1)
     w.close()
     return updateTime(cursor, conn)
