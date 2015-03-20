@@ -18,6 +18,16 @@ from WindPy import w
 def getNameid(name):
     return "".join([a for a in name[:2] if a.isalpha()])
 
+def departList(oldNameList):
+    nameList = []
+    spotList = []
+    for name in oldNameList:
+        if getNameid(name) == 'S':
+            spotList.append(name)
+        else:
+            nameList.append(name)
+    return ','.join(nameList), ','.join(spotList)
+
 # insert update time into db after data updated
 def updateTime(cursor, conn):
     try:
@@ -180,21 +190,21 @@ def updateDb(Config, f):
     else: #上一次更新不是今天
         beginTime = time + (time.time() > datetime.time(15, 30)) * datetime.timedelta(1)
         endTime = now - (not todayValid) * datetime.timedelta(1)
-    name = ','.join(oldNameList)
-    nameidList = str(set(map(getNameid, oldNameList)))[5:-2]
-    
+        
+    nameList, spotList = departList(oldNameList) # nameList = "CU1506.SHF,J1509.DCE,JM1505.DCE, ..."
+                                             # spotList = "S0033227,S5016816, ..."
     while (beginTime - endTime).days <= 0: # every tradeDate from beginTime to endTime
         tradeDate = beginTime.strftime('%Y-%m-%d')
         # get raw futures data
-        wind_re = w.wss(name, 'open,high,low,close,volume,oi', 'tradeDate=%s;priceAdj=F;cycle=D' % tradeDate) # get raw data
+        wind_re = w.wss(nameList, 'open,high,low,close,volume,oi', 'tradeDate=%s;priceAdj=F;cycle=D' % tradeDate) # get raw data
         if wind_re.ErrorCode != 0:
             w.close()
             cursor.close()
             conn.close()
             return False, 'WSS fails! Name = \'%s\' tradeDate = \'%s\' ErrorCode = %d Info = \'%s\'' % \
-            (name, tradeDate, wind_re.ErrorCode, wind_re.Data[0][0])
-        print('INSERT %s INTO DATABASE... (%s)' % (name, tradeDate))
-        print >>f, 'INSERT %s INTO DATABASE... (%s)' % (name, tradeDate)
+            (nameList, tradeDate, wind_re.ErrorCode, wind_re.Data[0][0])
+        print('INSERT %s INTO DATABASE... (%s)' % (nameList, tradeDate))
+        print >>f, 'INSERT %s INTO DATABASE... (%s)' % (nameList, tradeDate)
         
         try:
             addCount = 0
@@ -215,36 +225,18 @@ def updateDb(Config, f):
             cursor.close()
             conn.close()
             return False, query[:300] + '...\nQuery fails! {}'.format(e)
-        wind_re = w.wss(name, 'open,high,low,close,volume,oi', 'tradeDate=%s;priceAdj=F;cycle=D' % tradeDate) # get raw data
-        if wind_re.ErrorCode != 0:
-            w.close()
-            cursor.close()
-            conn.close()
-            return False, 'WSS fails! Name = \'%s\' tradeDate = \'%s\' ErrorCode = %d Info = \'%s\'' % \
-            (name, tradeDate, wind_re.ErrorCode, wind_re.Data[0][0])
-        print('INSERT %s INTO DATABASE... (%s)' % (name, tradeDate))
-        print >>f, 'INSERT %s INTO DATABASE... (%s)' % (name, tradeDate)
         
-        # get spotidList
-        try:
-            query = 'SELECT spotid FROM futures.`spotlist` WHERE nameid IN (%s)' % nameidList
-            cursor.execute(query)
-        except sqlconn.Error as e:
-            w.close()
-            cursor.close()
-            conn.close()
-            return False, 'Query fails! {}'.format(e)
-        spotid = [i[0] for i in cursor]
+        
         # get raw spot data
-        wind_re = w.wss(spotid, 'close', 'tradeDate=%s;priceAdj=F;cycle=D' % tradeDate) # get raw data
+        wind_re = w.wss(spotList, 'close', 'tradeDate=%s;priceAdj=F;cycle=D' % tradeDate) # get raw data
         if wind_re.ErrorCode != 0:
             w.close()
             cursor.close()
             conn.close()
             return False, 'WSS fails! Name = \'%s\' tradeDate = \'%s\' ErrorCode = %d Info = \'%s\'' % \
-            (spotid, tradeDate, wind_re.ErrorCode, wind_re.Data[0][0])
-        print('INSERT %s INTO DATABASE... (%s)' % (spotid, tradeDate))
-        print >>f, 'INSERT %s INTO DATABASE... (%s)' % (spotid, tradeDate)
+            (spotList, tradeDate, wind_re.ErrorCode, wind_re.Data[0][0])
+        print('INSERT %s INTO DATABASE... (%s)' % (spotList, tradeDate))
+        print >>f, 'INSERT %s INTO DATABASE... (%s)' % (spotList, tradeDate)
         
         try:
             addCount = 0
