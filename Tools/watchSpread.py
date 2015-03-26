@@ -10,13 +10,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 
-
-def addSuffix(nameid):
-    if nameid[:2] in {'CU','AL','ZN','PB','AU','AG','RB','RU','FU','WR','BU','HC','IM'}:
-        return nameid + '.SHF'
-    if nameid[:2] in {'A1','M1','Y1','P1','C1','I1','JM','J1','L1','V1','B1','JD','FB','BB','PP','CS'}:
-        return nameid + '.DCE'
-    return nameid + '.CZC'
+def getNameid(name):
+    return "".join([a for a in name[:2] if a.isalpha()])
+    
+def addSuffix(name):
+    nameid = getNameid(name)
+    if nameid in {'CU','AL','ZN','PB','AU','AG','RB','RU','FU','WR','BU','HC','IM'}:
+        return name + '.SHF'
+    if nameid in {'A','M','Y','P','C','I','JM','J','L','V','B','JD','FB','BB','PP','CS'}:
+        return name + '.DCE'
+    return name + '.CZC'
 
 def load(pair, cursor):
     nameid1 = addSuffix(pair[0])

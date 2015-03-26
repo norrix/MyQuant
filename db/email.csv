@@ -1,2 +1,5 @@
-receiver,sender,password,smtpserver
-511710698@qq.com,info@quantitlab.com,info,smtp.quantitlab.com:18205
+name,receiver,sendFlag
+xiarui,511710698@qq.com,N
+wangli,wangli@hfinvestment.com,Y
+people1,511710698@qq.com,N
+people2,511710698@qq.com,N
