@@ -4,21 +4,19 @@ Created on Thu Mar 19 09:34:36 2015
 
 @author: norris
 """
-
-
 import datetime
 import mysql.connector as sqlconn
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import math
 
-# 取出前两位字符中的字母
-# name = 'CU1505.DCE' -> return 'CU'
+def ln(x):
+    return math.log(x, math.e)
+    
 def getNameid(name):
     return "".join([a for a in name[:2] if a.isalpha()])
-
-# 添加后缀标签
-# name = 'CU1505' -> return 'CU1505.SHF'
+    
 def addSuffix(name):
     nameid = getNameid(name)
     if nameid in {'CU','AL','ZN','PB','AU','AG','RB','RU','FU','WR','BU','HC','IM'}:
@@ -27,66 +25,59 @@ def addSuffix(name):
         return name + '.DCE'
     return name + '.CZC'
 
-# 读取数据库数据
-# eg. pair = ['C1205', '2011-03-01','2012-05-10'] name = 'C1205.DCE' spotid = 'S0182161'
+# load data and calculate cumulative return
 def load(pair, cursor):
-    name = addSuffix(pair[0])
-    query = "SELECT spotid FROM futures.spotlist WHERE nameid = '%s' LIMIT 1" % getNameid(name)
-    cursor.execute(query)
-    for id in cursor:
-        spotid = id[0] # 取现货标签
-    start = pair[1] # 开始时间
-    if len(pair) > 2:
-        end = pair[2]
+    nameid1 = addSuffix(pair[0])
+    nameid2 = addSuffix(pair[1])
+    coef1 = pair[2]
+    coef2 = pair[3]
+    start = pair[4]
+    if len(pair) > 5:
+        end = pair[5]
     else:
         end = datetime.datetime.now().strftime('%Y-%m-%d')
     Time = []
-    Basis = []
+    Spread = []
     query = "SELECT * FROM \
-    (SELECT a.Time Time, a.Close Futures, b.Close Spot FROM \
+    (SELECT a.Time Time, a.Close Futures1, b.Close Futures2 FROM \
     (SELECT Close, Time FROM futures.prices WHERE Symbol = '%s') a JOIN \
     (SELECT Close, Time FROM futures.prices WHERE Symbol = '%s') b on \
     a.Time = b.Time) c WHERE Time BETWEEN \
     DATE_FORMAT('%s','%%Y-%%m-%%d') AND DATE_FORMAT('%s','%%Y-%%m-%%d')"\
-    % (name, spotid, start, end)
+    % (nameid1, nameid2, start, end)
     cursor.execute(query)
-    # 执行查询后依次取出数据
-    for dbTime, dbFutures, dbSpot in cursor:
+    for dbTime, dbFutures1, dbFutures2 in cursor:
         Time.append(dbTime)
-        Basis.append(dbSpot-dbFutures)
+        Spread.append(ln(dbFutures1*coef1)-ln(dbFutures2*coef2))
     if not len(Time):
-        print('No data returned when query %s from %s to %s.' % (pair[0], start, end))
+        print('No data returned when query %s_%s from %s to %s.' % (pair[0], pair[1], start, end))
         return False, None
-    return True, [pair[0], Time, Basis]
+    spread0 = Spread[0]
+    
+    return True, [pair[0]+'_'+pair[1], Time, [i-spread0 for i in Spread]]
 
 
 def plot(dataSet):
+        
+    dataAll = []
     
-    dataAll = [] # 保存所有价格数据，用于统计
-    # 建立fig，设置各图片位置及大小
     fig = plt.figure(figsize = (24,12))
     rect_ax = [0.05, 0.1, 0.75, 0.85]
     rect_axHist = [0.83, 0.1, 0.10, 0.85]
     ax = fig.add_subplot(121, position = rect_ax)
     axHist = fig.add_subplot(122, position = rect_axHist)
     
-    # 画图，设置标题、图例、网格
-    ax.set_title('Basis', fontsize = 14)
+    ax.set_title('Spread', fontsize = 14)
     for pairSet in dataSet:
         ax.plot(pairSet[1], pairSet[2], label = pairSet[0])
         dataAll += pairSet[2]
     ax.legend(framealpha = 0.2, fontsize = 'small', ncol = 9)
     ax.grid(True)
     
-    # 右侧直方图
     axHist.hist(dataAll, bins = 20, facecolor='#0000FF', alpha=0.5, orientation='horizontal')
     axHist.grid(True)
-    
-    # 设置labels旋转角度    
-    plt.setp(ax.get_xticklabels(), rotation = 30, horizontalalignment='right')     
+    plt.setp(ax.get_xticklabels(), rotation = 30, horizontalalignment='right') # labels旋转角度        
     dataAllNP = np.array(dataAll)
-    
-    # 添加右下角统计量文本text
     text = 'Obs: %d\nMax: %.2f\nMin: %.2f\nMean: %.2f\nStd: %.2f\nMedian: %.2f\n' \
     % (len(dataAll), dataAllNP.max(), dataAllNP.min(), dataAllNP.mean(), dataAllNP.std(), np.median(dataAllNP))
     ptl = np.percentile(dataAllNP, [90,80,70,60,50,40,30,20,10], interpolation = 'higher')
@@ -98,13 +89,9 @@ def plot(dataSet):
     plt.close(fig)
     
     
-def watchBasis(watchlist):
-    # 连接到数据库 host=固定IP cursor为query的接口
+def watchSpread(watchlist):
     conn = sqlconn.connect(user='root', password='root', host='10.0.1.130')
     cursor = conn.cursor()
-    
-    # 读取每一个pair的数据，并全部存储在dataSet中，对dataSet绘图
-    # dataSet=[data1, data2, ...]
     dataSet = []
     for pair in watchlist:
         success, data = load(pair, cursor)
@@ -120,6 +107,12 @@ def watchBasis(watchlist):
 
 if __name__ == '__main__':
     watchlist = [\
-        ['C1205', '2011-03-01','2012-05-10']
+        ['CU1504', 'CU1505', 1, 1, '2014-03-01', '2014-03-30'],\
+        ['CU1504', 'CU1505', 1, 1, '2014-05-01', '2014-05-30'],\
+        ['CU1504', 'CU1505', 1, 1, '2014-07-01', '2014-07-30'],\
+        ['CU1504', 'CU1505', 1, 1, '2014-09-01', '2014-09-30'],\
+        ['RB1505', 'RB1510', 1, 1, '2014-03-01', '2014-04-01'],\
+        ['RB1505', 'RB1510', 1, 1, '2014-08-01', '2014-12-31'],\
+        ['JM1505', 'J1505', 1.2, 1, '2015-01-01', '2015-02-28']
     ]
-    watchBasis(watchlist)
+    watchSpread(watchlist)

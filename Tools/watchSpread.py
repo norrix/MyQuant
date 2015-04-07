@@ -4,7 +4,7 @@ Created on Thu Mar 19 09:34:36 2015
 
 @author: norris
 """
-from datetime import datetime
+import datetime
 import mysql.connector as sqlconn
 import matplotlib.pyplot as plt
 import numpy as np
@@ -30,15 +30,15 @@ def load(pair, cursor):
     if len(pair) > 5:
         end = pair[5]
     else:
-        end = datetime.now().strftime('%Y-%m-%d')
+        end = datetime.datetime.now().strftime('%Y-%m-%d')
     Time = []
     Spread = []
-    query = 'SELECT * FROM \
+    query = "SELECT * FROM \
     (SELECT a.Time Time, a.Close Futures1, b.Close Futures2 FROM \
-    (SELECT Close, Time FROM futures.prices WHERE Symbol = \'%s\') a JOIN \
-    (SELECT Close, Time FROM futures.prices WHERE Symbol = \'%s\') b on \
+    (SELECT Close, Time FROM futures.prices WHERE Symbol = '%s') a JOIN \
+    (SELECT Close, Time FROM futures.prices WHERE Symbol = '%s') b on \
     a.Time = b.Time) c WHERE Time BETWEEN \
-    DATE_FORMAT(\'%s\',\'%%Y-%%m-%%d\') AND DATE_FORMAT(\'%s\',\'%%Y-%%m-%%d\')'\
+    DATE_FORMAT('%s','%%Y-%%m-%%d') AND DATE_FORMAT('%s','%%Y-%%m-%%d')"\
     % (nameid1, nameid2, start, end)
     cursor.execute(query)
     for dbTime, dbFutures1, dbFutures2 in cursor:
